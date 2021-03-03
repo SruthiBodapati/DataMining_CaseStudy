@@ -1,0 +1,184 @@
+---
+title: "Case Study Final"
+author: "Sai Sruthi Bodapati"
+date: "12/15/2019"
+output:
+  word_document: default
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## reading the dataset
+```{r}
+German <- read.csv("C:/Users/sruth/Desktop/first sem/BAN 620/Final Exam/GermanCredit.csv")
+missing(German) #dataset is checking for any other missing values
+View(German)
+str(German)
+```
+
+# Question 1. Review the predictor variables and guess what their role in a credit decision might be. Are there any surprise in the data?
+
+```{r}
+German$PRESENT_RESIDENT <- German$PRESENT_RESIDENT - 1
+German <- German[,c(-1,-22)]
+
+German$ANOTHER_OBJECTIVE <- ifelse(German$NEW_CAR+German$USED_CAR+German$FURNITURE+German$RADIO.TV+German$EDUCATION+German$RETRAINING==0, 1, 0)
+
+German$Female <- ifelse(German$MALE_DIV+German$MALE_MAR_or_WID+German$MALE_SINGLE==0, 1, 0)
+
+German$PRESENT_RESIDENT <- factor(German$PRESENT_RESIDENT, levels = c(0, 1, 2, 3), labels=c("<=1-year","1-2years","2-3years",">=3years"))
+
+German$EMPLOYMENT <- factor(German$EMPLOYMENT, levels = c(0,1,2,3,4), labels = c("Unemployed", "1years","1-3years","4-6year",">=7years"))
+
+German$JOB <- factor(German$JOB, levels = c(0, 1, 2, 3), labels=c("Uemployed","Unskilled-employee","Skilled-employee","highly qualified employee/self employed"))
+
+German$CHK_ACCT <- factor(German$CHK_ACCT, levels=c(0,1,2,3), labels = c("<0DM","0-200DM","200DM","No_checking_Acct"))
+
+German$HISTORY <- factor(German$HISTORY, levels = c(0,1,2,3,4), labels = c("No_Credits","Paid","Existing_Paid","Unpaid","Important_Acct"))
+
+German$SAV_ACCT <- factor(German$SAV_ACCT, levels=c(0,1,2,3,4), labels = c("<100DM","101-500DM","501-1000DM","1000DM","No_Saving_Acct"))
+
+New_German <- German
+head(German)
+head(New_German)
+
+
+library(dplyr)
+AMOUNT.mean = German %>% dplyr::select(AMOUNT,RESPONSE) %>% group_by(RESPONSE) %>% summarise(m =mean(AMOUNT))
+AMOUNT.mean
+DURATION.mean = German %>% dplyr::select(DURATION,RESPONSE) %>%group_by(RESPONSE) %>% summarise( m =mean(DURATION))
+DURATION.mean
+INSTALL_RATE.median = German %>% dplyr::select(INSTALL_RATE,RESPONSE) %>%group_by(RESPONSE) %>% summarise( m =median(INSTALL_RATE))
+INSTALL_RATE.median
+AGE.median = German %>% dplyr::select(AGE,RESPONSE) %>%group_by(RESPONSE) %>% summarise( m =median(AGE))
+AGE.median
+
+```
+In this case, classification problem is there which is the target variable of response column. In this dataset there were 4 categories in Present_Resident so one has to be substracted in order to have 0 to 3 levels. Real_estate and Prop_Unkn_none- either of them can be 0 but cannot be 0 at the same time. the Another-objective option is need and should be added to the data set. So the Female option has been added.
+At the end of this chunk, meadian values for bad records is lesser than that of good records in age variable, it might be premature to say young people tend to have bad credit records, but we can safely assume it tends to be riskier. In case of installment_rate variable great difference between the good and bad records, we see that bad records have more median value than good ones.For the amount variable, we observe that the amount for bad records is larger in general as compared to good ones.
+
+
+
+
+
+
+
+
+#Question 2. Divide the data into trainning and validatin partitions, and develop classification models using following data mining techniques in R: logistic regression, classification trees, and neural networks.
+
+#Question 3.Choose one modelfrom each technique and report the confusion matrix and the cost/gain matrix for the validation data. Which technique has the highest net profit?
+```{r}
+#creating model for logistic regression
+set.seed(2)
+dim(German)
+train1_rows <- sample(c(1:1000), 800) #first 1000 rows
+train1_data <- German[train1_rows,]#training data
+valid1_data <- German[-train1_rows,]#test data
+
+#logistic regression model
+g <- glm(RESPONSE~., data = train1_data, family="binomial") #logistic model was created
+options(scipen = 999)
+summary(g) #summary of the model
+pred <- predict(g, valid1_data[,-30], type = "response")#prediction of the model was done
+library(caret)
+library(ggplot2)
+confusionMatrix(as.factor(ifelse(pred>0.5, 1, 0)), as.factor(valid1_data$RESPONSE))#confusion matrix was created
+
+```
+ Logistic regression model
+ Cost Metrix:
+             Reference
+             Bad            Good
+ Predited
+ Bad         0              100*26=2600   
+ Good     34*500=17000       0
+ Gain Matrix:
+             Reference
+              Bad           Good
+ Predicted    
+ Bad          0             0
+ Good      -500*34=-17000    100*107=10700
+ Logistic Regression model, net profit is -6300.
+ 
+ 
+ 
+# Classification Tree
+```{r}
+library(rpart) 
+library(rpart.plot)
+set.seed(1)
+training_rows <- sample(c(1:1000), 800)
+train_data_tree <- New_German[training_rows,]
+valid_data <- New_German[-training_rows,]
+
+#classification tree model
+train_tree <- rpart(RESPONSE ~ ., data = train_data_tree, minbucket = 50, maxdepth = 10, model=TRUE, method = "class")
+train_tree$cptable[which.min(train_tree$cptable[,"xerror"]),"CP"]
+pfit_tree <- prune(train_tree, cp = train_tree$cptable[which.min(train_tree$cptable[,"xerror"]),"CP"])
+prp(train_tree) 
+# predictions on validation set 
+pred_valid <- predict(train_tree, valid_data[,-30])
+confusionMatrix(as.factor(1*(pred_valid[,2]>0.5)), as.factor(valid_data$RESPONSE), positive = "1")
+
+```
+ Classification tree model,
+ Cost Metrix:
+              Reference
+             Bad            Good
+ Predited
+ Bad         0              100*12=1200   
+ Good     48*500=31500       0
+ Gain Matrix:
+              Reference 
+              Bad           Good
+ Predicted    
+ Bad          0             0
+ Good      -500*48=-31500    100*121=19200
+Classification Tree model, net profit is -12300.
+
+# neuralnet model
+```{r}
+library("neuralnet")
+NN_German <- read.csv("C:/Users/sruth/Desktop/first sem/BAN 620/Final Exam/GermanCredit.csv")
+scale <- preProcess(NN_German, method = c("range"))
+German_scale <- predict(scale, NN_German)
+German_scale$good_credit <- German_scale$RESPONSE == 1
+German_scale$bad_credit <- German_scale$RESPONSE == 0
+
+set.seed(1)
+training_rows <- sample(c(1:1000), 800)
+train_data_nn <- German_scale[training_rows,]
+valid_data_nn <- German_scale[-training_rows,]
+
+colnames(train_data_nn)[8] <- "RADIO_OR_TV"
+colnames(train_data_nn)[18] <- "COAPPLICANT" 
+colnames(train_data_nn)
+nn <- neuralnet(bad_credit+good_credit~CHK_ACCT+DURATION+HISTORY+NEW_CAR+USED_CAR+FURNITURE+RADIO_OR_TV+EDUCATION+RETRAINING+AMOUNT+SAV_ACCT+EMPLOYMENT+INSTALL_RATE+MALE_DIV+MALE_SINGLE+MALE_MAR_or_WID+COAPPLICANT+GUARANTOR+PRESENT_RESIDENT+REAL_ESTATE+PROP_UNKN_NONE+AGE+OTHER_INSTALL+RENT+OWN_RES+NUM_CREDITS+JOB+NUM_DEPENDENTS+TELEPHONE+FOREIGN, data = train_data_nn, linear.output = F, hidden = 3)
+
+plot(nn, rep="best")
+predict <- neuralnet::compute(nn, valid_data_nn[,2:31])
+
+predicted.class <- apply(predict$net.result,1,which.max)-1
+confusionMatrix(as.factor(predicted.class), as.factor(valid_data_nn$RESPONSE))
+
+```
+ Neural network model,
+Cost Metrix:
+              Reference
+             Bad            Good
+ Predited
+ Bad         0              100*19=1900   
+ Good     41*500=20500       0
+ Gain Matrix:
+             Reference
+              Bad           Good
+ Predicted    
+ Bad          0             0
+ Good      -500*41=-20500   100*114=11400
+ neuralnet model, net profit is -9100.
+
+ So by looking over all the models,the logistic regression model provides the best net profit.
